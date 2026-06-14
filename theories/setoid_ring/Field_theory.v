@@ -1305,6 +1305,111 @@ Proof.
       eapply ring_rw_pow_correct; eauto.
 Qed.
 
+Lemma display_pow_linear_ad_hoc_cases l num den :
+  (exists c, den = Pc c /\ (c =? 1)%coef = true /\
+    display_pow_linear l num den = NPphi_pow l num) \/
+  (display_pow_linear l num den = NPphi_pow l num / NPphi_pow l den).
+Proof.
+unfold display_pow_linear.
+destruct den; [ | right ..]; auto.
+destruct (c =? 1)%coef eqn:cmpc.
+  left; exists c; easy.
+right; easy.
+Qed.
+
+Lemma NPphi_pow1 l c :
+  (c =? 1)%coef = true -> req (NPphi_pow l (Pc c)) 1.
+Proof.
+  rewrite Pphi_pow_ok; try apply CRmorph; auto.
+  unfold Pphi.
+  case (ceqb_spec c 1);[rewrite phi_1 | ]; easy.
+Qed.
+
+Lemma display_pow_linear_simplify l num den :
+  display_pow_linear l num den ==
+    NPphi_pow l num / NPphi_pow l den.
+Proof.
+destruct (display_pow_linear_ad_hoc_cases l num den) as
+  [[c [dq [cq dv]]] | dv].
+  rewrite dv, dq.
+  rewrite NPphi_pow1;[ | easy].
+  now rewrite <- rdiv1.
+rewrite dv; easy.
+Qed.
+
+Lemma cross_product_eq_left_factor (m a b c d : R) :
+  ~ m == 0 -> ~ b == 0 -> ~ d == 0 ->
+  m * a * d == m * c * b ->
+  a / b == c / d.
+Proof.
+intros mn0 bn0 dn0.
+rewrite <- !rmul_assoc.
+intros cp.
+apply rmul_reg_l in cp; auto.
+apply cross_product_eq; easy.
+Qed.
+
+Definition gcd_cond (l : list R)
+  (orig_denum den' orig_num num' gcd : Pol C) :=
+  ((exists c, orig_denum = Pc c /\ (c =? 1)%coef = true) ->
+    den' = orig_denum /\ num' = orig_num)
+     /\
+    ~ NPphi_pow l den' == (0 : R) /\ ~ NPphi_pow l gcd == 0.
+
+Lemma Pmul_c_ok l m p :
+  Pphi rO radd rmul phi l
+    (Pmul cO cI cadd cmul ceqb (Pc m) p) == [m] * Pphi rO radd rmul phi l p.
+Proof.
+rewrite Pmul_ok; try eassumption.
+easy.
+Qed.
+
+Theorem Field_rw_pow_correct_w_gcd n lpe l :
+  Ninterp_PElist l lpe ->
+  forall lmp, Nmk_monpol_list lpe = lmp ->
+  forall (fe : FExpr) (nfe : linear), Fnorm fe = nfe ->
+  forall m num' den' gcd,
+  gcd_cond l (Nnorm n lmp (denum nfe)) den' (Nnorm n lmp (num nfe)) num' gcd ->
+  ~ phi m == 0 ->
+  (* TODO: this should use equality Peq instead of Leibniz. *)
+  (Pmul cO cI cadd cmul ceqb (Pc m) (Nnorm n lmp (num nfe))) = 
+  (Pmul cO cI cadd cmul ceqb num' gcd) ->
+  (Pmul cO cI cadd cmul ceqb (Pc m) (Nnorm n lmp (denum nfe))) =
+  (Pmul cO cI cadd cmul ceqb den' gcd) ->
+  PCond l (condition nfe) ->
+  FEeval l fe == display_pow_linear l num' den'.
+Proof.
+  intros Hlpe lmp lmp_eq fe nfe eq_nfe m num' den' gcd
+    extra_cond mn0 num'_eq den'_eq field_cond.
+  rewrite (Field_rw_pow_correct n lpe l Hlpe lmp_eq fe eq_nfe); auto.
+  rewrite 2!display_pow_linear_simplify.
+  assert (~ Pphi 0 radd rmul phi l den' == 0 /\  ~ 
+            Pphi 0 radd rmul phi l gcd == 0) as [den'n0 gcd_n0].
+    destruct extra_cond as [ _ [A B]].
+    rewrite Pphi_pow_ok in A, B; try eassumption.
+    split; easy.
+  apply (cross_product_eq_left_factor mn0).
+      rewrite Pphi_pow_ok; try eassumption.
+      enough (stepup : ~ phi m * NPphi_pow l (Nnorm n lmp (denum nfe)) == 0).
+        intros abs; case stepup.
+        rewrite Pphi_pow_ok; try eassumption.
+        now rewrite abs, rmul_0_r.
+      rewrite Pphi_pow_ok; try eassumption.
+      rewrite <- Pmul_c_ok.
+      rewrite den'_eq.
+      rewrite Pmul_ok; try eassumption.
+      destruct extra_cond as [_ [A B]].
+      apply field_is_integral_domain; easy.
+    rewrite Pphi_pow_ok; try eassumption.
+  rewrite (rmul_comm [m] (NPphi_pow l num')), <- (rmul_assoc _ [m]).
+  rewrite !Pphi_pow_ok; try eassumption.
+  rewrite <- !Pmul_c_ok.
+  rewrite num'_eq, den'_eq, !Pmul_ok; try eassumption.
+  rewrite (rmul_comm (Pphi _ _ _ _ _ den')).
+  rewrite rmul_assoc.
+  easy.
+Qed.
+
 Theorem Field_correct n l lpe fe1 fe2 :
  Ninterp_PElist l lpe ->
  forall lmp, Nmk_monpol_list lpe = lmp ->

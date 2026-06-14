@@ -94,6 +94,13 @@ Ltac FFV Cst CstPow rO rI add mul sub opp div inv pow t fv :=
 (* packaging the field structure *)
 
 (* TODO: inline PackField into field_lookup *)
+(* in field_lookup, L1 is field_ok, an instantiation of Field_theory.Field_correct
+     L2 is field_simpl_ok, an instantiation of Field_theory.Field_rw_pow_correct
+              (or Field_rw_correct when power are not used)
+     L3 is field_simpl_eq_ok an instantiation of 
+       Field_theory.Field_simplify_eq_pow_correct,
+  L4 is field_simpl_eq_in_ok an instance of
+    Field_theory.Field_simplify_eq_pow_in_correct. *)
 Ltac PackField F req Cst_tac Pow_tac L1 L2 L3 L4 cond_ok pre post :=
   let FLD :=
     match type of L1 with
@@ -259,6 +266,55 @@ Ltac Field_norm_gen f n FLD lH rl :=
   ReflexiveRewriteTactic mkFFV mkFE lemma_tac main_tac fv0 rl;
   try simpl_PCond FLD.
 
+Ltac rewrites_aux H term finish_tac :=
+  match type of H with
+  | forall _, ?val = _ -> _ =>
+    let nfe := eval vm_compute in val in
+    let val_name := fresh "Fnorm_value" in
+    pose (val_name := nfe);
+    let tmp := fresh "rewrites_aux_tmp" in
+    assert (tmp : val = nfe);
+    [vm_cast_no_check (eq_refl val)|
+      generalize (eq_refl term) (H _ tmp); clear H tmp;
+      idtac "just before calling the finishing tactic";
+      ltac:(finish_tac ()) || idtac "finishing tactic failed"
+    ]
+  | _ => fail 1000 "failed to instantiate with computation"
+  end.
+
+Ltac rewrites
+  R FV_tac SYN_tac LEMMA_tac finish_tac terms :=
+(* extend the atom list *)
+let fv := list_fold_left FV_tac (@nil R) terms in
+let dname := fresh "debug4_yves" in
+assert (dname := eq_refl fv);
+let RW_tac lemma :=
+  let fcons term CONT_tac :=
+    let fe := SYN_tac term fv in
+    let debug := fresh "debug3_yves" in
+     (assert (debug := lemma fe) || fail 1000 "failed to instantiate lemma")
+    ; rewrites_aux debug term finish_tac
+    in
+    idtac "before entering lazy_list_fold_right" fv "  " terms;
+    lazy_list_fold_right fcons ltac:(fun _=> idtac) terms
+     in
+  LEMMA_tac fv RW_tac.
+
+(* WARNING: Field_nor_gen_gcd is less powerful than Field_norm_gen since
+  it does not take into account lists of hypotheses with known equalities,
+  even though the lemma is suppose to accept them. *)
+Ltac Field_norm_gen_gcd lemma finish_tac f n FLD rl :=
+  let R := relation_carrier ltac:(get_FldEq FLD) in
+  let mkFFV := get_FFV FLD in
+  let mkFE :=  get_Meta FLD in
+  let lemma_tac fv kont :=
+    (* partially instantiate the lemma *)
+    let lem := fresh "f_rw_lemma" in
+    (assert (lem := lemma n (@nil (PExpr _ * PExpr _)) fv I (@nil _) eq_refl); 
+     kont lem) in
+  idtac "before entering rewrites";
+  rewrites R mkFFV mkFE lemma_tac finish_tac rl.
+ 
 (* This is duplicated from Ring_tac mutatis mutandi. but the simplification
   lemma is computed in Field_norm_gen, while the ring infrastructure does
   it in Ring_simplify_gen. *)
@@ -273,9 +329,25 @@ Ltac Field_simplify_gen f FLD lH rl :=
     | [|- l = ?RL -> _ ] => RL
     | _ => fail 1 "ring_simplify anomaly: bad goal after pre"
     end in
-  let Heq := fresh "Heq" in
-  intros Heq;clear Heq l;
+  intros _; clear l;
   Field_norm_gen f ring_subst_niter FLD lH rl;
+  get_FldPost FLD ().
+
+  (* quick-and-dirty trick, see comment before tactic notation
+    field_simplify_gcd *)
+  Ltac Field_simplify_gen_gcd thm finish_tac f FLD _ rl :=
+  let l := fresh "to_rewrite" in
+  pose (l:= rl);
+  generalize (eq_refl l);
+  unfold l at 2;
+  get_FldPre FLD ();
+  let rl :=
+    match goal with
+    | [|- l = ?RL -> _ ] => RL
+    | _ => fail 1 "ring_simplify anomaly: bad goal after pre"
+    end in
+  intros _; clear l;
+  Field_norm_gen_gcd thm finish_tac f ring_subst_niter FLD rl;
   get_FldPost FLD ().
 
 Ltac Field_simplify :=
@@ -284,6 +356,17 @@ Ltac Field_simplify :=
 Tactic Notation (at level 0) "field_simplify" constr_list(rl) :=
   let G := Get_goal in
   field_lookup (PackField Field_simplify) [] rl G.
+
+Ltac Field_simplify_gcd thm :=
+  Field_simplify_gen_gcd thm ltac:(fun H => let debug := fresh "debug_yves" in
+    assert(debug := H); rewrite H).
+  
+(* As a quick-and-dirty trick, to avoid having to modify rocq-core, we
+  assume the justification lemma is passed as first argument of the
+  tactic. *)
+ Tactic Notation (at level 0) "field_simplify_gcd" tactic(t) "/" constr_list(rl) :=
+  let G := Get_goal in
+  field_lookup (PackField t) [] rl G.
 
 Tactic Notation (at level 0)
   "field_simplify" "[" constr_list(lH) "]" constr_list(rl) :=
