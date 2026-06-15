@@ -259,7 +259,7 @@ Ltac Field_norm_gen f n FLD lH rl :=
     (* continuation will call main_tac for all reified terms *)
     kont lem;
     (* at the end, cleanup *)
-    (clear lem vlmp_eq vlmp vlpe||idtac"Field_norm_gen:cleanup failed") in
+    (clear lem vlmp_eq vlmp vlpe|| idtac "Field_norm_gen:cleanup failed") in
   (* each instance of the lemma is simplified then passed to f *)
   let main_tac H := protect_fv "field" in H; f H in
   (* generate and use equations for each expression *)
@@ -276,9 +276,8 @@ Ltac rewrites_aux H term finish_tac :=
     assert (tmp : val = nfe);
     [vm_cast_no_check (eq_refl val)|
       generalize (eq_refl term) (H _ tmp); clear H tmp;
-      idtac "just before calling the finishing tactic";
-      try idtac "finihshing tactic" finish_tac;
-      ltac:(finish_tac ()) || idtac "finishing tactic failed"
+      ltac:(finish_tac ());
+      clear val_name || idtac "finishing tactic failed"
     ]
   | _ => fail 1000 "failed to instantiate with computation"
   end.
@@ -287,16 +286,13 @@ Ltac rewrites
   R FV_tac SYN_tac LEMMA_tac finish_tac terms :=
 (* extend the atom list *)
 let fv := list_fold_left FV_tac (@nil R) terms in
-let dname := fresh "debug4_yves" in
-assert (dname := eq_refl fv);
 let RW_tac lemma :=
   let fcons term CONT_tac :=
     let fe := SYN_tac term fv in
-    let debug := fresh "debug3_yves" in
-     (assert (debug := lemma fe) || fail 1000 "failed to instantiate lemma")
-    ; rewrites_aux debug term finish_tac
+    let lemma1 := fresh "lemma_instantiated_on_fexpr" in
+     (assert (lemma1 := lemma fe) || fail 1000 "failed to instantiate lemma")
+    ; rewrites_aux lemma1 term finish_tac
     in
-    idtac "before entering lazy_list_fold_right" fv "  " terms;
     lazy_list_fold_right fcons ltac:(fun _=> idtac) terms
      in
   LEMMA_tac fv RW_tac.
@@ -312,9 +308,8 @@ Ltac Field_norm_gen_gcd lemma finish_tac f n FLD rl_fngcd :=
     (* partially instantiate the lemma *)
     let lem := fresh "f_rw_lemma" in
     (assert (lem := lemma n (@nil (PExpr _ * PExpr _)) fv I (@nil _) eq_refl); 
-     kont lem) in
-  idtac "before entering rewrites";
-  rewrites R mkFFV mkFE lemma_tac finish_tac rl_fngcd.
+     kont lem; clear lem) in
+    rewrites R mkFFV mkFE lemma_tac finish_tac rl_fngcd.
  
 (* This is duplicated from Ring_tac mutatis mutandi. but the simplification
   lemma is computed in Field_norm_gen, while the ring infrastructure does
@@ -335,21 +330,20 @@ Ltac Field_simplify_gen f FLD lH rl :=
   get_FldPost FLD ().
 
   (* quick-and-dirty trick, see comment before tactic notation
-    field_simplify_gcd *)
-  Ltac Field_simplify_gen_gcd thm finish_tac f FLD _ rl_fsgg :=
-  idtac "in fsgg : FLD is " FLD;
+    field_simplify_gcd. *)
+  Ltac Field_simplify_gen_gcd thm finish_tac f FLD _ rl :=
   let l := fresh "to_rewrite" in
-  pose (l:= rl_fsgg);
+  pose (l:= rl);
   generalize (eq_refl l);
   unfold l at 2;
   get_FldPre FLD ();
-  let rl_fsgg :=
+  let rl :=
     match goal with
     | [|- l = ?RL -> _ ] => RL
     | _ => fail 1 "ring_simplify anomaly: bad goal after pre"
     end in
   intros _; clear l;
-  Field_norm_gen_gcd thm finish_tac f ring_subst_niter FLD rl_fsgg;
+  Field_norm_gen_gcd thm finish_tac f ring_subst_niter FLD rl;
   get_FldPost FLD ().
 
 Ltac Field_simplify :=
