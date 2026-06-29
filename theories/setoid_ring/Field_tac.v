@@ -97,7 +97,7 @@ Ltac FFV Cst CstPow rO rI add mul sub opp div inv pow t fv :=
 (* in field_lookup, L1 is field_ok, an instantiation of Field_theory.Field_correct
      L2 is field_simpl_ok, an instantiation of Field_theory.Field_rw_pow_correct
               (or Field_rw_correct when power are not used)
-     L3 is field_simpl_eq_ok an instantiation of 
+     L3 is field_simpl_eq_ok an instantiation of
        Field_theory.Field_simplify_eq_pow_correct,
   L4 is field_simpl_eq_in_ok an instance of
     Field_theory.Field_simplify_eq_pow_in_correct. *)
@@ -274,10 +274,14 @@ Ltac rewrites_aux H term finish_tac :=
     pose (val_name := nfe);
     let tmp := fresh "rewrites_aux_tmp" in
     assert (tmp : val = nfe);
+    idtac "in rewrite_aux" val "=" nfe;
     [vm_cast_no_check (eq_refl val)|
+      match goal with |- ?G =>
+        let Htype := type of H in idtac "debug4" Htype end;
       generalize (eq_refl term) (H _ tmp); clear H tmp;
-      ltac:(finish_tac ());
-      clear val_name || idtac "finishing tactic failed"
+      match goal with |- ?G => idtac "debug3" G end;
+      (ltac:(finish_tac); idtac "finishing tactic succeeded";
+      clear val_name) || idtac "finishing tactic failed"
     ]
   | _ => fail 1000 "failed to instantiate with computation"
   end.
@@ -291,7 +295,7 @@ let RW_tac lemma :=
     let fe := SYN_tac term fv in
     let lemma1 := fresh "lemma_instantiated_on_fexpr" in
      (assert (lemma1 := lemma fe) || fail 1000 "failed to instantiate lemma")
-    ; rewrites_aux lemma1 term finish_tac
+    ; rewrites_aux lemma1 term finish_tac; CONT_tac ()
     in
     lazy_list_fold_right fcons ltac:(fun _=> idtac) terms
      in
@@ -307,10 +311,10 @@ Ltac Field_norm_gen_gcd lemma finish_tac f n FLD rl_fngcd :=
   let lemma_tac fv kont :=
     (* partially instantiate the lemma *)
     let lem := fresh "f_rw_lemma" in
-    (assert (lem := lemma n (@nil (PExpr _ * PExpr _)) fv I (@nil _) eq_refl); 
+    (assert (lem := lemma n (@nil (PExpr _ * PExpr _)) fv I (@nil _) eq_refl);
      kont lem; clear lem) in
     rewrites R mkFFV mkFE lemma_tac finish_tac rl_fngcd.
- 
+
 (* This is duplicated from Ring_tac mutatis mutandi. but the simplification
   lemma is computed in Field_norm_gen, while the ring infrastructure does
   it in Ring_simplify_gen. *)
@@ -355,7 +359,7 @@ Tactic Notation (at level 0) "field_simplify" constr_list(rl) :=
 
 Ltac Field_simplify_gcd thm tac :=
   Field_simplify_gen_gcd thm ltac:(tac) ltac:(fun H => rewrite H).
-  
+
 (* As a quick-and-dirty trick, to avoid having to modify rocq-core, we
   assume the justification lemma is passed as first argument of the
   tactic. *)
