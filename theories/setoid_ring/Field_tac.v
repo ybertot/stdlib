@@ -266,28 +266,26 @@ Ltac Field_norm_gen f n FLD lH rl :=
   ReflexiveRewriteTactic mkFFV mkFE lemma_tac main_tac fv0 rl;
   try simpl_PCond FLD.
 
-Ltac rewrites_aux H term finish_tac :=
+Ltac rewrites_aux norm_fun fv H term finish_tac :=
   match type of H with
   | forall _, ?val = _ -> _ =>
     let nfe := eval vm_compute in val in
     let val_name := fresh "Fnorm_value" in
     pose (val_name := nfe);
+    let d := constr:(norm_fun ring_subst_niter nil (denum nfe)) in
+    let n := constr:(norm_fun ring_subst_niter nil (num nfe)) in
     let tmp := fresh "rewrites_aux_tmp" in
     assert (tmp : val = nfe);
-    idtac "in rewrite_aux" val "=" nfe;
     [vm_cast_no_check (eq_refl val)|
-      match goal with |- ?G =>
-        let Htype := type of H in idtac "debug4" Htype end;
-      generalize (eq_refl term) (H _ tmp); clear H tmp;
-      match goal with |- ?G => idtac "debug3" G end;
-      (ltac:(finish_tac); idtac "finishing tactic succeeded";
-      clear val_name) || idtac "finishing tactic failed"
+      generalize (H _ tmp); clear H tmp;
+      (ltac:(finish_tac term fv d n);
+        clear val_name) || idtac "finishing tactic failed"
     ]
   | _ => fail 1000 "failed to instantiate with computation"
   end.
 
 Ltac rewrites
-  R FV_tac SYN_tac LEMMA_tac finish_tac terms :=
+  R FV_tac SYN_tac norm_fun LEMMA_tac finish_tac terms :=
 (* extend the atom list *)
 let fv := list_fold_left FV_tac (@nil R) terms in
 let RW_tac lemma :=
@@ -295,7 +293,7 @@ let RW_tac lemma :=
     let fe := SYN_tac term fv in
     let lemma1 := fresh "lemma_instantiated_on_fexpr" in
      (assert (lemma1 := lemma fe) || fail 1000 "failed to instantiate lemma")
-    ; rewrites_aux lemma1 term finish_tac; CONT_tac ()
+    ; rewrites_aux norm_fun fv lemma1 term finish_tac;[CONT_tac () | .. ]
     in
     lazy_list_fold_right fcons ltac:(fun _=> idtac) terms
      in
@@ -304,7 +302,7 @@ let RW_tac lemma :=
 (* WARNING: Field_nor_gen_gcd is less powerful than Field_norm_gen since
   it does not take into account lists of hypotheses with known equalities,
   even though the lemma is suppose to accept them. *)
-Ltac Field_norm_gen_gcd lemma finish_tac f n FLD rl_fngcd :=
+Ltac Field_norm_gen_gcd norm_fun lemma finish_tac f n FLD rl_fngcd :=
   let R := relation_carrier ltac:(get_FldEq FLD) in
   let mkFFV := get_FFV FLD in
   let mkFE :=  get_Meta FLD in
@@ -313,7 +311,7 @@ Ltac Field_norm_gen_gcd lemma finish_tac f n FLD rl_fngcd :=
     let lem := fresh "f_rw_lemma" in
     (assert (lem := lemma n (@nil (PExpr _ * PExpr _)) fv I (@nil _) eq_refl);
      kont lem; clear lem) in
-    rewrites R mkFFV mkFE lemma_tac finish_tac rl_fngcd.
+    rewrites R mkFFV mkFE norm_fun lemma_tac finish_tac rl_fngcd.
 
 (* This is duplicated from Ring_tac mutatis mutandi. but the simplification
   lemma is computed in Field_norm_gen, while the ring infrastructure does
@@ -335,7 +333,7 @@ Ltac Field_simplify_gen f FLD lH rl :=
 
   (* quick-and-dirty trick, see comment before tactic notation
     field_simplify_gcd. *)
-  Ltac Field_simplify_gen_gcd thm finish_tac f FLD _ rl :=
+  Ltac Field_simplify_gen_gcd norm_fun thm finish_tac f FLD _ rl :=
   let l := fresh "to_rewrite" in
   pose (l:= rl);
   generalize (eq_refl l);
@@ -347,7 +345,7 @@ Ltac Field_simplify_gen f FLD lH rl :=
     | _ => fail 1 "ring_simplify anomaly: bad goal after pre"
     end in
   intros _; clear l;
-  Field_norm_gen_gcd thm finish_tac f ring_subst_niter FLD rl;
+  Field_norm_gen_gcd norm_fun thm finish_tac f ring_subst_niter FLD rl;
   get_FldPost FLD ().
 
 Ltac Field_simplify :=
@@ -357,8 +355,8 @@ Tactic Notation (at level 0) "field_simplify" constr_list(rl) :=
   let G := Get_goal in
   field_lookup (PackField Field_simplify) [] rl G.
 
-Ltac Field_simplify_gcd thm tac :=
-  Field_simplify_gen_gcd thm ltac:(tac) ltac:(fun H => rewrite H).
+Ltac Field_simplify_gcd norm_fun thm tac :=
+  Field_simplify_gen_gcd norm_fun thm ltac:(tac) ltac:(fun H => rewrite H).
 
 (* As a quick-and-dirty trick, to avoid having to modify rocq-core, we
   assume the justification lemma is passed as first argument of the
