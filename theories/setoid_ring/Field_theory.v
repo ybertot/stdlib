@@ -1351,9 +1351,6 @@ Qed.
 
 Definition gcd_cond (l : list R)
   (orig_denum den' orig_num num' gcd : Pol C) :=
-  ((exists c, orig_denum = Pc c /\ (c =? 1)%coef = true) ->
-    den' = orig_denum /\ num' = orig_num)
-     /\
     ~ NPphi_pow l den' == (0 : R) /\ ~ NPphi_pow l gcd == 0.
 
 Lemma Pmul_c_ok l m p :
@@ -1371,21 +1368,24 @@ Theorem Field_rw_pow_correct_w_gcd n lpe l :
   forall m num' den' gcd,
   gcd_cond l (Nnorm n lmp (denum nfe)) den' (Nnorm n lmp (num nfe)) num' gcd ->
   ~ phi m == 0 ->
-  (* TODO: this should use equality Peq instead of Leibniz. *)
-  (Pmul cO cI cadd cmul ceqb (Pc m) (Nnorm n lmp (num nfe))) = 
-  (Pmul cO cI cadd cmul ceqb num' gcd) ->
-  (Pmul cO cI cadd cmul ceqb (Pc m) (Nnorm n lmp (denum nfe))) =
-  (Pmul cO cI cadd cmul ceqb den' gcd) ->
+  Peq ceqb
+    (Pmul cO cI cadd cmul ceqb (Pc m) (Nnorm n lmp (num nfe)))
+  (Pmul cO cI cadd cmul ceqb num' gcd) = true ->
+  Peq ceqb
+    (Pmul cO cI cadd cmul ceqb (Pc m) (Nnorm n lmp (denum nfe)))
+  (Pmul cO cI cadd cmul ceqb den' gcd) = true ->
   PCond l (condition nfe) ->
   FEeval l fe == display_pow_linear l num' den'.
 Proof.
   intros Hlpe lmp lmp_eq fe nfe eq_nfe m num' den' gcd
     extra_cond mn0 num'_eq den'_eq field_cond.
+  apply (Peq_ok Rsth Reqe CRmorph) in den'_eq, num'_eq.
+  unfold Pequiv in den'_eq, num'_eq.
   rewrite (Field_rw_pow_correct n lpe l Hlpe lmp_eq fe eq_nfe); auto.
   rewrite 2!display_pow_linear_simplify.
   assert (~ Pphi 0 radd rmul phi l den' == 0 /\  ~ 
             Pphi 0 radd rmul phi l gcd == 0) as [den'n0 gcd_n0].
-    destruct extra_cond as [ _ [A B]].
+    destruct extra_cond as [A B].
     rewrite Pphi_pow_ok in A, B; try eassumption.
     split; easy.
   apply (cross_product_eq_left_factor mn0).
@@ -1398,7 +1398,7 @@ Proof.
       rewrite <- Pmul_c_ok.
       rewrite den'_eq.
       rewrite Pmul_ok; try eassumption.
-      destruct extra_cond as [_ [A B]].
+      destruct extra_cond as [A B].
       apply field_is_integral_domain; easy.
     rewrite Pphi_pow_ok; try eassumption.
   rewrite (rmul_comm [m] (NPphi_pow l num')), <- (rmul_assoc _ [m]).
