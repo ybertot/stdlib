@@ -333,19 +333,19 @@ Ltac Field_simplify_gen f FLD lH rl :=
 
   (* quick-and-dirty trick, see comment before tactic notation
     field_simplify_gcd. *)
-  Ltac Field_simplify_gen_gcd norm_fun thm finish_tac f FLD _ rl :=
+  Ltac Field_simplify_gen_gcd norm_fun thm finish_tac f FLD _ rl' :=
   let l := fresh "to_rewrite" in
-  pose (l:= rl);
+  pose (l:= rl');
   generalize (eq_refl l);
   unfold l at 2;
   get_FldPre FLD ();
-  let rl :=
+  let rl2 :=
     match goal with
     | [|- l = ?RL -> _ ] => RL
     | _ => fail 1 "ring_simplify anomaly: bad goal after pre"
     end in
   intros _; clear l;
-  Field_norm_gen_gcd norm_fun thm finish_tac f ring_subst_niter FLD rl;
+  Field_norm_gen_gcd norm_fun thm finish_tac f ring_subst_niter FLD rl2;
   get_FldPost FLD ().
 
 Ltac Field_simplify :=
