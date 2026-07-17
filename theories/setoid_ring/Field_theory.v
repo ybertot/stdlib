@@ -230,6 +230,17 @@ transitivity (/r1 * r1 * r2).
 - now rewrite <- rmul_assoc, H2.
 Qed.
 
+Theorem field_is_integral_domain_non_zero r1 r2 :
+  ~ r1 * r2 == 0 -> ~ r1 == 0 /\ ~ r2 == 0.
+Proof.
+intros H.
+split.
+  contradict H.
+  now rewrite H; apply rmul_0_l.
+contradict H.
+  now rewrite H; apply rmul_0_r.
+Qed.
+
 Theorem ropp_neq_0 r :
   ~ -(1) == 0 -> ~ r == 0 -> ~ -r == 0.
 Proof.
@@ -1349,9 +1360,6 @@ apply rmul_reg_l in cp; auto.
 apply cross_product_eq; easy.
 Qed.
 
-Definition gcd_cond (l : list R)
-  (orig_denum den' orig_num num' gcd : Pol C) :=
-    ~ NPphi_pow l den' == (0 : R) /\ ~ NPphi_pow l gcd == 0.
 
 Lemma Pmul_c_ok l m p :
   Pphi rO radd rmul phi l
@@ -1366,7 +1374,6 @@ Theorem Field_rw_pow_correct_w_gcd n lpe l :
   forall lmp, Nmk_monpol_list lpe = lmp ->
   forall (fe : FExpr) (nfe : linear), Fnorm fe = nfe ->
   forall m num' den' gcd,
-  gcd_cond l (Nnorm n lmp (denum nfe)) den' (Nnorm n lmp (num nfe)) num' gcd ->
   ~ phi m == 0 ->
   Peq ceqb
     (Pmul cO cI cadd cmul ceqb (Pc m) (Nnorm n lmp (num nfe)))
@@ -1378,16 +1385,30 @@ Theorem Field_rw_pow_correct_w_gcd n lpe l :
   FEeval l fe == display_pow_linear l num' den'.
 Proof.
   intros Hlpe lmp lmp_eq fe nfe eq_nfe m num' den' gcd
-    extra_cond mn0 num'_eq den'_eq field_cond.
+   mn0 num'_eq den'_eq field_cond.
   apply (Peq_ok Rsth Reqe CRmorph) in den'_eq, num'_eq.
   unfold Pequiv in den'_eq, num'_eq.
   rewrite (Field_rw_pow_correct n lpe l Hlpe lmp_eq fe eq_nfe); auto.
   rewrite 2!display_pow_linear_simplify.
   assert (~ Pphi 0 radd rmul phi l den' == 0 /\  ~ 
             Pphi 0 radd rmul phi l gcd == 0) as [den'n0 gcd_n0].
-    destruct extra_cond as [A B].
-    rewrite Pphi_pow_ok in A, B; try eassumption.
-    split; easy.
+    assert  (~ (denum (Fnorm fe)) @ l == 0) as denum_n0.
+      apply Pcond_Fnorm.
+      rewrite eq_nfe; easy.
+    rewrite eq_nfe in denum_n0.
+    assert (Pphi 0 radd rmul phi l (Pmul 0%coef 1%coef cadd cmul ceqb (Pc m) (Nnorm n lmp (denum nfe))) == Pphi 0 radd rmul phi l (Pmul 0%coef 1%coef cadd cmul ceqb den' gcd)) as den_eql.
+      apply den'_eq.
+    rewrite Pmul_c_ok in den_eql.
+    assert (Hden_eval :
+      (denum nfe) @ l == Pphi 0 radd rmul phi l (Nnorm n lmp (denum nfe))).
+        rewrite <- lmp_eq;
+        apply (norm_subst_ok Rsth Reqe ARth CRmorph pow_th cdiv_th n l lpe (denum nfe) Hlpe).
+    assert (~ ([m] * Pphi 0 radd rmul phi l (Nnorm n lmp (denum nfe)) == 0)) as denum_n0'.
+      apply field_is_integral_domain; trivial.
+      rewrite <- Hden_eval; exact denum_n0.
+    rewrite den_eql in denum_n0'.
+    rewrite (Pmul_ok Rsth Reqe ARth CRmorph) in denum_n0'.
+    apply field_is_integral_domain_non_zero; trivial.
   apply (cross_product_eq_left_factor mn0).
       rewrite Pphi_pow_ok; try eassumption.
       enough (stepup : ~ phi m * NPphi_pow l (Nnorm n lmp (denum nfe)) == 0).
@@ -1398,7 +1419,6 @@ Proof.
       rewrite <- Pmul_c_ok.
       rewrite den'_eq.
       rewrite Pmul_ok; try eassumption.
-      destruct extra_cond as [A B].
       apply field_is_integral_domain; easy.
     rewrite Pphi_pow_ok; try eassumption.
   rewrite (rmul_comm [m] (NPphi_pow l num')), <- (rmul_assoc _ [m]).
