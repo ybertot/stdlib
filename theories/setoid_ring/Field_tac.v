@@ -274,13 +274,15 @@ Ltac rewrites_aux norm_fun H term finish_tac :=
     pose (val_name := nfe);
     let d := constr:(norm_fun ring_subst_niter nil (denum nfe)) in
     let n := constr:(norm_fun ring_subst_niter nil (num nfe)) in
+    let d1 := eval vm_compute in d in
+    let n1 := eval vm_compute in n in
     let tmp := fresh "rewrites_aux_tmp" in
     assert (tmp : val = nfe);
     [vm_cast_no_check (eq_refl val)|
       generalize (H _ tmp); clear H tmp;
       let rw_lemma_name := fresh "rw_lemma" in
       intros rw_lemma_name;
-      (ltac:(finish_tac term rw_lemma_name d n);
+      (ltac:(finish_tac term rw_lemma_name d1 n1);
         clear val_name) || idtac "finishing tactic failed"
     ]
   | _ => fail 1000 "failed to instantiate with computation"
